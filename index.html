@@ -36,4 +36,53 @@
   </style>
 </head>
 <body>
-  <h1>🌾 Seed Photo Fetch
+  <h1>🌾 Seed Photo Fetcher</h1>
+  <p>Вставьте список латинских названий растений (одно на строку):</p>
+  <textarea id="plantList" placeholder="Agrimonia eupatoria&#10;Anthemis tinctoria&#10;Echium vulgare"></textarea>
+  <br>
+  <button onclick="fetchSeedPhotos()">🔍 Найти фото семян</button>
+
+  <div id="gallery" class="gallery"></div>
+
+  <script>
+    async function fetchSeedPhotos() {
+      const input = document.getElementById('plantList').value.trim();
+      const plants = input.split('\n').map(p => p.trim()).filter(Boolean);
+      const gallery = document.getElementById('gallery');
+      gallery.innerHTML = '';
+
+      for (const name of plants) {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.innerHTML = `<p><strong>${name}</strong></p><p>🔄 Загружается...</p>`;
+        gallery.appendChild(item);
+
+        try {
+          const searchRes = await fetch(`https://api.inaturalist.org/v1/search?q=${encodeURIComponent(name)}&sources=taxa`);
+          const searchData = await searchRes.json();
+          const taxonId = searchData.results?.[0]?.record?.id;
+          if (!taxonId) throw new Error('Не найдено');
+
+          const obsRes = await fetch(`https://api.inaturalist.org/v1/observations?taxon_id=${taxonId}&per_page=5&order=desc&order_by=created_at&quality_grade=research&term_id=12&term_value_id=13`);
+          const obsData = await obsRes.json();
+          const seedPhoto = obsData.results
+            .flatMap(result => result.photos || [])
+            .find(photo => photo?.url);
+
+          if (!seedPhoto) throw new Error('Фото семян не найдено');
+
+          const photoUrl = seedPhoto.url.replace('square', 'large');
+          item.innerHTML = `<p><strong>${name}</strong></p><img src="${photoUrl}" alt="${name}">`;
+        } catch (err) {
+          const googleSearch = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(name + ' seed')}`;
+          item.innerHTML = `
+            <p><strong>${name}</strong></p>
+            <p>❌ ${err.message}</p>
+            <a href="${googleSearch}" target="_blank">🔎 Найти в Google</a>
+          `;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
